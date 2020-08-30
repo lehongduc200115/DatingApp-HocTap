@@ -14,7 +14,7 @@ namespace DatingApp.API.Data
 
         public DbSet<ClassifyCustomer> ClassifyCustomer { get; set; }
 
-        public DbSet<User> User { get; set; }
+        public DbSet<User> Users { get; set; }
 
         // protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder){
         //     optionsBuilder.UseSqlServer(@"server=.\SQLEXPRESS;Database=CustomerDB; Trusted_Connection=True;");

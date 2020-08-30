@@ -8,6 +8,7 @@ using System.Security.Cryptography.Xml;
 using System.Text;
 using System.Threading.Tasks;
 using DatingApp.API.Data;
+using DatingApp.API.Dtos;
 using DatingApp.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -17,87 +18,71 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace DatingApp.API.Controllers
 {
-    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
     {
-        private readonly DataContext2 _dbcontext;
+        private readonly IAuthService _service;
         private readonly IConfiguration _configuration;
-
-        public AuthController(DataContext2 dbcontext, IConfiguration configuration)
+        public AuthController(IAuthService service, IConfiguration configuration)
         {
-            _dbcontext = dbcontext;
             _configuration = configuration;
+            _service = service;
         }
 
-
-        [HttpPost("Register")]
-        public IActionResult Register(string username, string password)
+        [HttpPost("register")]
+        public async Task<IActionResult> Register(UserForRegisterDto userForRegisterDto)
         {
-            var usr = _dbcontext.User.FirstOrDefault<User>(x => x.Username == username);
-            if (usr != null)
+            // validate request
+
+            userForRegisterDto.Username = userForRegisterDto.Username.ToLower();
+
+            if (await _service.UserExists(userForRegisterDto.Username))
+                return BadRequest("Username already exists");
+
+            var userToCreate = new User
             {
-                return BadRequest();
-            }
-            else
-            {
-                var newusr = new User { Username = username, Password = password };
-                _dbcontext.User.Add(newusr);
-                _dbcontext.SaveChanges();
-                return Ok();
-            }
+                Username = userForRegisterDto.Username
+            };
+
+            var createdUser = _service.Register(userToCreate, userForRegisterDto.Password);
+
+            return StatusCode(201);
         }
 
         [HttpPost("login")]
-        public IActionResult Login(User user)
+        public async Task<IActionResult> Login(UserForLoginDto userForLoginDto)
         {
-            var usr = _dbcontext.User.FirstOrDefault<User>(x => x.Username == user.Username);
-            if (usr == null)
-            {
-                return Unauthorized();
-            }
-            else
-            {
-                return new ObjectResult(CreateJWT(user.Username));
-            }
-        }
+            var userForService = await _service.Login(userForLoginDto.Username.ToLower(), userForLoginDto.Password);
 
-        public dynamic CreateJWT(string username)
-        {
-            var claims = new[]
+            if (userForService == null)
+                return Unauthorized();
+
+            var claim = new[]
             {
-                new Claim(ClaimTypes.Name, username)
+                new Claim(ClaimTypes.NameIdentifier, userForService.Id.ToString()),
+                new Claim(ClaimTypes.Name, userForService.Username)
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetSection("AppSettings:Token").Value));
+            var key = new SymmetricSecurityKey(Encoding.UTF8
+                .GetBytes(_configuration.GetSection("AppSettings:Token").Value.ToString()));
 
-            var cred = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
 
             var tokenDescriptor = new SecurityTokenDescriptor
             {
-                Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.Now.AddDays(0.5),
-                SigningCredentials = cred
+                Subject = new ClaimsIdentity(claim),
+                Expires = DateTime.Now.AddDays(1),
+                SigningCredentials = creds
             };
 
             var tokenHandler = new JwtSecurityTokenHandler();
 
             var token = tokenHandler.CreateToken(tokenDescriptor);
 
-            var result = new
-            {
+            return Ok(new {
                 token = tokenHandler.WriteToken(token)
-            };
-            return result;
-        }
-
-        //[AllowAnonymous]
-        [HttpGet("GetHttpContext")]
-        public IActionResult GetHttpContext()
-        {
-            var x = HttpContext;
-            return Ok();
+            });
         }
     }
 }
