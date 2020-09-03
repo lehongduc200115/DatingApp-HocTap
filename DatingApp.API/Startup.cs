@@ -23,6 +23,7 @@ using System.Net;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using DatingApp.API.Helpers;
+using AutoMapper;
 
 namespace DatingApp.API
 {
@@ -42,7 +43,11 @@ namespace DatingApp.API
             //services.AddDbContext<DataContext2>(x => x.UseSqlServer("datasource=Customer.db").UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
             //services.AddDbContext<DataContext2>(x => x.UseSqlServer(@"server=.\SQLEXPRESS;Database=CustomerDB; Trusted_Connection=True;"));
             services.AddDbContext<DataContext2>(x => x.UseSqlServer(Configuration.GetConnectionString("DefaultConnect")));
-            services.AddControllers();
+            services.AddControllers().AddNewtonsoftJson(opt =>
+            {
+                opt.SerializerSettings.ReferenceLoopHandling =
+                    Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+            });
 
             //Register Swagger generator, Swashbuckle
             services.AddSwaggerGen();
@@ -61,7 +66,8 @@ namespace DatingApp.API
             
             services.AddCors();
             services.AddScoped<IAuthService, AuthService>();
-
+            services.AddScoped<IDatingRepository, DatingRepository>();
+            services.AddAutoMapper(typeof(DatingRepository).Assembly);
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
